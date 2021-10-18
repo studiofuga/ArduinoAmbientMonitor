@@ -2,9 +2,32 @@
 #include <Wire.h>    // I2C library
 #include "ccs811.h"  // CCS811 library
 #include <BME280I2C.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
 
 CCS811 *ccs811;
 BME280I2C *bme;
+
+BLEServer *bleServer;
+BLEService *bleService;
+BLEAdvertising *bleAdvertising;
+
+BLECharacteristic *bleChTemperature;
+BLECharacteristic *bleChHumidity;
+BLECharacteristic *bleChPressure;
+BLECharacteristic *bleChEco2;
+BLECharacteristic *bleChTVoc;
+
+float valueTemperature = 10.1;
+float valueHumidity = 10.1;
+float valuePressure = 10.1;
+
+#define ENV_SERVICE_UUID        uint16_t (0x180a)
+
+#define CHAR_TEMPERATURE uint16_t(0x2a6e)
+#define CHAR_HUMIDITY uint16_t(0x2a6f)
+#define CHAR_PRESSURE uint16_t(0x2a6d)
 
 void setupIO()
 {
@@ -65,12 +88,47 @@ void setupSerial()
     Serial.print("setup: ccs811 lib  version: "); Serial.println(CCS811_VERSION);
 }
 
+void setupBLE()
+{
+    BLEDevice::init("Ambient");
+    bleServer = BLEDevice::createServer();
+    bleService = bleServer->createService(BLEUUID{ENV_SERVICE_UUID});
+    bleChTemperature = bleService->createCharacteristic(
+            CHAR_TEMPERATURE,
+            BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_INDICATE
+    );
+    bleChHumidity = bleService->createCharacteristic(
+            CHAR_HUMIDITY,
+            BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_INDICATE
+    );
+    bleChPressure = bleService->createCharacteristic(
+            CHAR_PRESSURE,
+            BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_INDICATE
+    );
+
+    bleChTemperature->setValue(valueTemperature);
+    bleChHumidity->setValue(valueHumidity);
+    bleChPressure->setValue(valuePressure);
+    bleService->start();
+
+    // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
+    bleAdvertising = BLEDevice::getAdvertising();
+    bleAdvertising->addServiceUUID(BLEUUID{ENV_SERVICE_UUID});
+    bleAdvertising->setScanResponse(true);
+    bleAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+    bleAdvertising->setMinPreferred(0x12);
+    BLEDevice::startAdvertising();
+
+    Serial.println("Characteristic defined! Now you can read it in your phone!");
+}
+
 void setup()
 {
     setupSerial();
     setupIO();
     setupAirQ();
     setupTemp();
+    setupBLE();
 }
 
 void readAirQ()
@@ -116,6 +174,13 @@ void readTemp()
     Serial.print("\t\tPressure: ");
     Serial.print(pres);
     Serial.println("Pa");
+
+    valueTemperature = temp;
+    bleChTemperature->indicate();
+    valueHumidity = hum;
+    bleChHumidity->indicate();
+    valuePressure = pres;
+    bleChPressure->indicate();
 }
 
 void loop()
