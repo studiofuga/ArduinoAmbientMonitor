@@ -23,7 +23,8 @@ float valueTemperature = 10.1;
 float valueHumidity = 10.1;
 float valuePressure = 10.1;
 
-#define ENV_SERVICE_UUID        uint16_t (0x180a)
+#define DEVINFO_SERVICE_UUID        uint16_t (0x180a)
+#define ENV_SERVICE_UUID        uint16_t (0x181a)
 
 #define CHAR_TEMPERATURE uint16_t(0x2a6e)
 #define CHAR_HUMIDITY uint16_t(0x2a6f)
