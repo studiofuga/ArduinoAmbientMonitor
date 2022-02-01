@@ -28,6 +28,8 @@ float valueTemperature = 10.1;
 float valueHumidity = 10.1;
 float valuePressure = 10.1;
 
+unsigned long lastAirUpdate = 0;
+
 #define DEVINFO_SERVICE_UUID        uint16_t (0x180a)
 #define ENV_SERVICE_UUID        uint16_t (0x181a)
 
@@ -41,12 +43,14 @@ SSD1306Wire display(0x3c, SDA, SCL);   // ADDRESS, SDA, SCL  -  SDA and SCL usua
 OLEDDisplayUi ui ( &display );
 
 void stdFrame (OLEDDisplay *display, OLEDDisplayUiState* state);
-void frame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+void frameTemp(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+void frameHum(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+void framePres(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
 
-FrameCallback frames[] = { frame };
+FrameCallback frames[] = { frameTemp, frameHum, framePres };
 
 // how many frames are there?
-int frameCount = 1;
+int frameCount = 3;
 
 // Overlays are statically drawn on top of a frame eg. a clock
 OverlayCallback overlays[] = { stdFrame };
@@ -56,6 +60,13 @@ int screenW = 128;
 int screenH = 64;
 int centerX = screenW / 2;
 int centerY = ((screenH - 16) / 2) - 16; // top yellow part is 16 px height
+
+int tX = screenW / 2;
+int tY = ((screenH - 16) / 2) + 16;
+int hX = screenW / 2;
+int hY = ((screenH - 16) / 2) + 16;
+int pX = screenW / 2;
+int pY = ((screenH - 16) / 2) + 16;
 
 void setupIO()
 {
@@ -75,6 +86,8 @@ void setupUi()
 
     // Add overlays
     ui.setOverlays(overlays, overlaysCount);
+
+    ui.disableAllIndicators();
 
     // Initialising the UI will init the display too.
     ui.init();
@@ -234,8 +247,12 @@ void readTemp()
 
 void loop()
 {
-//    readAirQ();
-//    readTemp();
+    unsigned long now = millis();
+    if (now - lastAirUpdate > 5000) {
+        lastAirUpdate = now;
+        readAirQ();
+        readTemp();
+    }
 
     int remainingTimeBudget = ui.update();
 
@@ -263,9 +280,26 @@ void stdFrame(OLEDDisplay *display, OLEDDisplayUiState* state)
     String timenow = String(hour()) + ":" + twoDigits(minute()) + ":" + twoDigits(second());
     display->setTextAlignment(TEXT_ALIGN_CENTER);
     display->setFont(ArialMT_Plain_24);
+
     display->drawString(centerX , centerY, timenow );
 }
 
-void frame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+void frameTemp(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
 {
+    String tmp = String(floor(valueTemperature * 10 + 0.5) / 10, 1) + "°C";
+
+    display->setFont(ArialMT_Plain_16);
+    display->drawString(tX+x, tY+y, tmp);
+}
+void frameHum(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+    String hum = String((int)floor(valueHumidity)) + "% RH";
+    display->setFont(ArialMT_Plain_16);
+    display->drawString(hX+x, hY+y, hum);
+}
+void framePres(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+    String pre = String((int)floor(valuePressure/100)) + "hPa";
+    display->setFont(ArialMT_Plain_16);
+    display->drawString(pX+x, pY+y, pre);
 }
