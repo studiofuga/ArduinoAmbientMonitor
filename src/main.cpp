@@ -2,18 +2,26 @@
 #include <Wire.h>    // I2C library
 #include "ccs811.h"  // CCS811 library
 #include <BME280I2C.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
+
+#if defined(ENABLE_BT)
+    #include <BLEDevice.h>
+    #include <BLEUtils.h>
+    #include <BLEServer.h>
+#endif
 
 #include "SSD1306Wire.h" // legacy include: `#include "SSD1306.h"`
 #include <OLEDDisplayUi.h>
 #include <TimeLib.h>
 
+#include <NTPClient.h>
+
+#include <WiFi.h>
+#include <WiFiUdp.h>
 
 CCS811 *ccs811;
 BME280I2C *bme;
 
+#if defined(ENABLE_BT)
 BLEServer *bleServer;
 BLEService *bleService;
 BLEAdvertising *bleAdvertising;
@@ -24,6 +32,22 @@ BLECharacteristic *bleChPressure;
 BLECharacteristic *bleChEco2;
 BLECharacteristic *bleChTVoc;
 
+#define DEVINFO_SERVICE_UUID        uint16_t (0x180a)
+#define ENV_SERVICE_UUID        uint16_t (0x181a)
+
+#define CHAR_TEMPERATURE uint16_t(0x2a6e)
+#define CHAR_HUMIDITY uint16_t(0x2a6f)
+#define CHAR_PRESSURE uint16_t(0x2a6d)
+#endif
+
+#include "WifiConfig.h"
+
+WiFiUDP ntpUDP;
+
+#define TIME_ZONE_OFFSET_HRS            (+1)
+
+NTPClient timeClient(ntpUDP);
+
 float valueTemperature = 10.1;
 float valueHumidity = 10.1;
 float valuePressure = 10.1;
@@ -31,13 +55,6 @@ float valueEvoc = 10.1;
 float valueEco2 = 10.1;
 
 unsigned long lastAirUpdate = 0;
-
-#define DEVINFO_SERVICE_UUID        uint16_t (0x180a)
-#define ENV_SERVICE_UUID        uint16_t (0x181a)
-
-#define CHAR_TEMPERATURE uint16_t(0x2a6e)
-#define CHAR_HUMIDITY uint16_t(0x2a6f)
-#define CHAR_PRESSURE uint16_t(0x2a6d)
 
 // Initialize the OLED display using Wire library
 SSD1306Wire display(0x3c, SDA, SCL);   // ADDRESS, SDA, SCL  -  SDA and SCL usually populate automatically based on your board's pins_arduino.h e.g. https://github.com/esp8266/Arduino/blob/master/variants/nodemcu/pins_arduino.h
@@ -95,6 +112,40 @@ void setupUi()
     display.flipScreenVertically();
 }
 
+void setupTime()
+{
+    WiFi.begin(ssid, pass);
+
+    while ( WiFi.status() != WL_CONNECTED )
+    {
+        delay ( 500 );
+        Serial.print ( "." );
+    }
+
+    Serial.print(F("\nESP_NTPClient_Basic started @ IP address: "));
+    Serial.println(WiFi.localIP());
+
+    timeClient.begin();
+    timeClient.setTimeOffset(3600 * TIME_ZONE_OFFSET_HRS);
+    // default 60000 => 60s. Set to once per hour
+//    timeClient.setUpdateInterval(SECS_IN_HR);
+
+//    Serial.println("Using NTP Server " + timeClient.getPoolServerName());
+
+    timeClient.forceUpdate();
+
+
+//    if (timeClient.updated()){
+    Serial.println("********UPDATED********");
+    setTime(timeClient.getEpochTime());
+//        }
+//    else
+//        Serial.println("******NOT UPDATED******");
+
+    timeClient.end();
+    WiFi.disconnect();
+}
+
 void setupAirQ()
 {
     ccs811 = new CCS811(23, CCS811_SLAVEADDR_1); // nWAKE on 23
@@ -149,6 +200,7 @@ void setupSerial()
     Serial.print("setup: ccs811 lib  version: "); Serial.println(CCS811_VERSION);
 }
 
+#if defined(ENABLE_BT)
 void setupBLE()
 {
     BLEDevice::init("Ambient");
@@ -182,15 +234,20 @@ void setupBLE()
 
     Serial.println("Characteristic defined! Now you can read it in your phone!");
 }
+#endif
 
 void setup()
 {
     setupSerial();
     setupIO();
     setupUi();
+    setupTime();
     setupAirQ();
     setupTemp();
+
+#if defined(ENABLE_BT)
     setupBLE();
+#endif
 }
 
 void readAirQ()
@@ -241,11 +298,14 @@ void readTemp()
     Serial.println("Pa");
 
     valueTemperature = temp;
-    bleChTemperature->indicate();
     valueHumidity = hum;
-    bleChHumidity->indicate();
     valuePressure = pres;
+
+#if defined(ENABLE_BT)
+    bleChTemperature->indicate();
+    bleChHumidity->indicate();
     bleChPressure->indicate();
+#endif
 }
 
 void loop()
