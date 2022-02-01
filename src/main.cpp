@@ -27,6 +27,8 @@ BLECharacteristic *bleChTVoc;
 float valueTemperature = 10.1;
 float valueHumidity = 10.1;
 float valuePressure = 10.1;
+float valueEvoc = 10.1;
+float valueEco2 = 10.1;
 
 unsigned long lastAirUpdate = 0;
 
@@ -46,11 +48,13 @@ void stdFrame (OLEDDisplay *display, OLEDDisplayUiState* state);
 void frameTemp(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
 void frameHum(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
 void framePres(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+void frameCO2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+void frameTVOC(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
 
-FrameCallback frames[] = { frameTemp, frameHum, framePres };
+FrameCallback frames[] = { frameTemp, frameHum, framePres, frameCO2, frameTVOC };
 
 // how many frames are there?
-int frameCount = 3;
+int frameCount = 5;
 
 // Overlays are statically drawn on top of a frame eg. a clock
 OverlayCallback overlays[] = { stdFrame };
@@ -59,14 +63,10 @@ int overlaysCount = 1;
 int screenW = 128;
 int screenH = 64;
 int centerX = screenW / 2;
-int centerY = ((screenH - 16) / 2) - 16; // top yellow part is 16 px height
+int centerY = ((screenH - 16) / 2) - 20; // top yellow part is 16 px height
 
-int tX = screenW / 2;
-int tY = ((screenH - 16) / 2) + 16;
-int hX = screenW / 2;
-int hY = ((screenH - 16) / 2) + 16;
-int pX = screenW / 2;
-int pY = ((screenH - 16) / 2) + 16;
+int sY = ((screenH - 16) / 2) + 9;
+int tY = ((screenH - 16) / 2) + 20;
 
 void setupIO()
 {
@@ -201,6 +201,9 @@ void readAirQ()
 
     // Print measurement results based on status
     if( errstat==CCS811_ERRSTAT_OK ) {
+        valueEco2 = eco2;
+        valueEvoc = etvoc;
+
         Serial.print("CCS811: ");
         Serial.print("eco2=");  Serial.print(eco2);     Serial.print(" ppm  ");
         Serial.print("etvoc="); Serial.print(etvoc);    Serial.print(" ppb  ");
@@ -288,18 +291,50 @@ void frameTemp(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16
 {
     String tmp = String(floor(valueTemperature * 10 + 0.5) / 10, 1) + "°C";
 
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(centerX+x, sY+y, "Temp");
+
     display->setFont(ArialMT_Plain_16);
-    display->drawString(tX+x, tY+y, tmp);
+    display->drawString(centerX+x, tY+y, tmp);
 }
 void frameHum(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
 {
-    String hum = String((int)floor(valueHumidity)) + "% RH";
+    String hum = String((int)floor(valueHumidity)) + "%";
+
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(centerX+x, sY+y, "Rel Hum");
+
     display->setFont(ArialMT_Plain_16);
-    display->drawString(hX+x, hY+y, hum);
+    display->drawString(centerX+x, tY+y, hum);
 }
 void framePres(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
 {
     String pre = String((int)floor(valuePressure/100)) + "hPa";
+
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(centerX+x, sY+y, "Pres");
+
     display->setFont(ArialMT_Plain_16);
-    display->drawString(pX+x, pY+y, pre);
+    display->drawString(centerX+x, tY+y, pre);
+}
+
+void frameCO2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+    String pre = String((int)floor(valueEco2)) + "ppm";
+
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(centerX+x, sY+y, "CO2");
+
+    display->setFont(ArialMT_Plain_16);
+    display->drawString(centerX+x, tY+y, pre);
+}
+void frameTVOC(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+    String pre = String((int) floor(valueEvoc)) + "ppm";
+
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(centerX+x, sY+y, "TVOC");
+
+    display->setFont(ArialMT_Plain_16);
+    display->drawString(centerX+x, tY+y, pre);
 }
