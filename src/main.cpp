@@ -6,6 +6,11 @@
 #include <BLEUtils.h>
 #include <BLEServer.h>
 
+#include "SSD1306Wire.h" // legacy include: `#include "SSD1306.h"`
+#include <OLEDDisplayUi.h>
+#include <TimeLib.h>
+
+
 CCS811 *ccs811;
 BME280I2C *bme;
 
@@ -30,9 +35,51 @@ float valuePressure = 10.1;
 #define CHAR_HUMIDITY uint16_t(0x2a6f)
 #define CHAR_PRESSURE uint16_t(0x2a6d)
 
+// Initialize the OLED display using Wire library
+SSD1306Wire display(0x3c, SDA, SCL);   // ADDRESS, SDA, SCL  -  SDA and SCL usually populate automatically based on your board's pins_arduino.h e.g. https://github.com/esp8266/Arduino/blob/master/variants/nodemcu/pins_arduino.h
+// SH1106Wire display(0x3c, SDA, SCL);
+OLEDDisplayUi ui ( &display );
+
+void stdFrame (OLEDDisplay *display, OLEDDisplayUiState* state);
+void frame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+
+FrameCallback frames[] = { frame };
+
+// how many frames are there?
+int frameCount = 1;
+
+// Overlays are statically drawn on top of a frame eg. a clock
+OverlayCallback overlays[] = { stdFrame };
+int overlaysCount = 1;
+
+int screenW = 128;
+int screenH = 64;
+int centerX = screenW / 2;
+int centerY = ((screenH - 16) / 2) - 16; // top yellow part is 16 px height
+
 void setupIO()
 {
     Wire.begin(21, 22);
+
+}
+
+void setupUi()
+{
+    // The ESP is capable of rendering 60fps in 80Mhz mode
+    // but that won't give you much time for anything else
+    // run it in 160Mhz mode or just set it to 30 fps
+    ui.setTargetFPS(10);
+
+    // Add frames
+    ui.setFrames(frames, frameCount);
+
+    // Add overlays
+    ui.setOverlays(overlays, overlaysCount);
+
+    // Initialising the UI will init the display too.
+    ui.init();
+
+    display.flipScreenVertically();
 }
 
 void setupAirQ()
@@ -127,6 +174,7 @@ void setup()
 {
     setupSerial();
     setupIO();
+    setupUi();
     setupAirQ();
     setupTemp();
     setupBLE();
@@ -186,8 +234,38 @@ void readTemp()
 
 void loop()
 {
-    readAirQ();
-    readTemp();
+//    readAirQ();
+//    readTemp();
 
-    delay(1000);
+    int remainingTimeBudget = ui.update();
+
+    if (remainingTimeBudget > 0) {
+        // You can do some work here
+        // Don't do stuff if you are below your
+        // time budget.
+        delay(remainingTimeBudget);
+    }
+}
+
+// utility function for digital clock display: prints leading 0
+String twoDigits(int digits) {
+    if (digits < 10) {
+        String i = '0' + String(digits);
+        return i;
+    }
+    else {
+        return String(digits);
+    }
+}
+
+void stdFrame(OLEDDisplay *display, OLEDDisplayUiState* state)
+{
+    String timenow = String(hour()) + ":" + twoDigits(minute()) + ":" + twoDigits(second());
+    display->setTextAlignment(TEXT_ALIGN_CENTER);
+    display->setFont(ArialMT_Plain_24);
+    display->drawString(centerX , centerY, timenow );
+}
+
+void frame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
 }
