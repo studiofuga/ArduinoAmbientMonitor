@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>    // I2C library
-#include "ccs811.h"  // CCS811 library
+#include <ccs811.h>  // CCS811 library
 #include <BME280I2C.h>
 
 #if defined(ENABLE_BT)
@@ -17,6 +17,11 @@
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <WiFiClientSecure.h>
+
+#include <MqttClient.h>
+
+BME280I2C::Settings settings;
 
 CCS811 *ccs811;
 BME280I2C *bme;
@@ -42,7 +47,16 @@ BLECharacteristic *bleChTVoc;
 
 #include "WifiConfig.h"
 
+WiFiClientSecure wifiClient;
 WiFiUDP ntpUDP;
+
+MqttClient mqttClient(wifiClient);
+
+char mqttTemperatureTopic[] = mqttRootTopic "/temp";
+char mqttHumidityTopic[] = mqttRootTopic "/hum";
+char mqttHpaTopic[] = mqttRootTopic "/hpa";
+char mqttCo2Topic[] = mqttRootTopic "/co2";
+char mqttTvocTopic[] = mqttRootTopic "/tvoc";
 
 #define TIME_ZONE_OFFSET_HRS            (+1)
 
@@ -55,6 +69,9 @@ float valueEvoc = 10.1;
 float valueEco2 = 10.1;
 
 unsigned long lastAirUpdate = 0;
+unsigned long lastPostUpdate = 0;
+
+unsigned long postCount = 0;
 
 // Initialize the OLED display using Wire library
 SSD1306Wire display(0x3c, SDA, SCL);   // ADDRESS, SDA, SCL  -  SDA and SCL usually populate automatically based on your board's pins_arduino.h e.g. https://github.com/esp8266/Arduino/blob/master/variants/nodemcu/pins_arduino.h
@@ -112,7 +129,7 @@ void setupUi()
     display.flipScreenVertically();
 }
 
-void setupTime()
+void setupNetwork() 
 {
     WiFi.begin(ssid, pass);
 
@@ -124,7 +141,27 @@ void setupTime()
 
     Serial.print(F("\nESP_NTPClient_Basic started @ IP address: "));
     Serial.println(WiFi.localIP());
+}
 
+void setupMqtt() 
+{
+    wifiClient.setCACert(DEVICE_PUBLIC_CERT);
+    wifiClient.setCertificate(DEVICE_DEVICE_CERT);
+    wifiClient.setPrivateKey(DEVICE_PRIVATE_KEY);
+
+    Serial.println("Setup SSL");
+
+    auto r = mqttClient.connect(mqttBroker, mqttBrokerPort);
+    if (!r) {
+        Serial.println("Failed to connect");
+    }
+
+    Serial.print(F("Connect "));
+    Serial.println(mqttBroker);
+}
+
+void setupTime()
+{
     timeClient.begin();
     timeClient.setTimeOffset(3600 * TIME_ZONE_OFFSET_HRS);
     // default 60000 => 60s. Set to once per hour
@@ -136,18 +173,20 @@ void setupTime()
 
 
 //    if (timeClient.updated()){
-    Serial.println("********UPDATED********");
     setTime(timeClient.getEpochTime());
+    Serial.println("********UPDATED********");
 //        }
 //    else
 //        Serial.println("******NOT UPDATED******");
 
     timeClient.end();
-    WiFi.disconnect();
+
+    lastPostUpdate = now() ;
 }
 
 void setupAirQ()
 {
+    Serial.println("Setting up CCS811");
     ccs811 = new CCS811(23, CCS811_SLAVEADDR_1); // nWAKE on 23
     
     // Enable CCS811
@@ -164,11 +203,14 @@ void setupAirQ()
     // Start measuring
     ok= ccs811->start(CCS811_MODE_1SEC);
     if( !ok ) Serial.println("setup: CCS811 start FAILED");
+
+    Serial.println("Done");
 }
 
 void setupTemp()
 {
-    BME280I2C::Settings settings;
+    Serial.println("Setting up BME280");
+
     settings.bme280Addr = BME280I2C::I2CAddr_0x77;
     bme = new BME280I2C(settings);
 
@@ -189,6 +231,9 @@ void setupTemp()
         default:
             Serial.println("Found UNKNOWN sensor! Error!");
     }
+
+    Serial.println("Setting up BME280 ok");
+
 }
 
 void setupSerial()
@@ -240,10 +285,13 @@ void setup()
 {
     setupSerial();
     setupIO();
-    setupUi();
-    setupTime();
     setupAirQ();
     setupTemp();
+
+    setupUi();
+    setupNetwork();
+    setupTime();
+    setupMqtt();
 
 #if defined(ENABLE_BT)
     setupBLE();
@@ -308,6 +356,34 @@ void readTemp()
 #endif
 }
 
+void postData() 
+{
+    Serial.println("Publishing:");
+    Serial.println(mqttTemperatureTopic);
+
+    mqttClient.beginMessage(mqttTemperatureTopic);
+    mqttClient.print(valueTemperature);
+    mqttClient.endMessage();
+
+    Serial.println(mqttHumidityTopic);
+
+    mqttClient.beginMessage(mqttHumidityTopic);
+    mqttClient.print(valueHumidity);
+    mqttClient.endMessage();
+
+    mqttClient.beginMessage(mqttHpaTopic);
+    mqttClient.print(valuePressure);
+    mqttClient.endMessage();
+
+    mqttClient.beginMessage(mqttCo2Topic);
+    mqttClient.print(valueEco2);
+    mqttClient.endMessage();
+
+    mqttClient.beginMessage(mqttTvocTopic);
+    mqttClient.print(valueEvoc);
+    mqttClient.endMessage();
+}
+
 void loop()
 {
     unsigned long now = millis();
@@ -315,6 +391,15 @@ void loop()
         lastAirUpdate = now;
         readAirQ();
         readTemp();
+
+        if (now - lastPostUpdate > mqttPostDelay) {
+            lastPostUpdate = now;
+            postData();
+            postCount = 0;
+        } else {
+            ++postCount;
+        }
+
     }
 
     int remainingTimeBudget = ui.update();
@@ -345,6 +430,13 @@ void stdFrame(OLEDDisplay *display, OLEDDisplayUiState* state)
     display->setFont(ArialMT_Plain_24);
 
     display->drawString(centerX , centerY, timenow );
+
+    if (postCount > 4) {
+        String n = String("mqtt... ") + String(postCount);
+        display->drawString(0,0,n);
+    } else {
+        display->drawString(0,0,"mqtt ok");
+    }
 }
 
 void frameTemp(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)

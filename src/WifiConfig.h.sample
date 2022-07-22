@@ -8,4 +8,24 @@
 char ssid[] = "";             // your network SSID (name)
 char pass[] = "";         // your network password
 
+char mqttBroker[] = "YOUR-BROKER-HERE";
+int mqttBrokerPort = 8883;
+
+char mqttRootTopic[] = "/some/thing/";
+
+int mqttPostDelay = 60000;      // in milliseconds
+
+char DEVICE_PUBLIC_CERT[] = "-----BEGIN CERTIFICATE-----\n\
+... CA certificate here ...
+-----END CERTIFICATE-----";
+
+char DEVICE_DEVICE_CERT[] = "-----BEGIN CERTIFICATE-----\n\
+... Device Certificate here ...
+-----END CERTIFICATE-----";
+
+char DEVICE_PRIVATE_KEY[] = "-----BEGIN RSA PRIVATE KEY-----\n\
+... Device Secret key here ...
+-----END RSA PRIVATE KEY-----";
+
+
 #endif //TEMPAIRQSENSOR_WIFICONFIG_H
