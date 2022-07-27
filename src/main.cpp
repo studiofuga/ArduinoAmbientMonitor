@@ -445,12 +445,15 @@ void stdFrame(OLEDDisplay *display, OLEDDisplayUiState* state)
 
     display->drawString(centerX , centerY, timenow );
 
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->setFont(ArialMT_Plain_10);
     if (postCount > 4) {
-        String n = String("mqtt... ") + String(postCount);
+        String n = String(">") + String(postCount);
         display->drawString(0,0,n);
     } else {
-        display->drawString(0,0,"mqtt ok");
+        display->drawString(0,0,"ok");
     }
+    display->setTextAlignment(TEXT_ALIGN_CENTER);
 }
 
 void frameTemp(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
