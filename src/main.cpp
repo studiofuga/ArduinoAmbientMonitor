@@ -52,11 +52,14 @@ WiFiUDP ntpUDP;
 
 MqttClient mqttClient(wifiClient);
 
-char mqttTemperatureTopic[] = mqttRootTopic "/temp";
-char mqttHumidityTopic[] = mqttRootTopic "/hum";
-char mqttHpaTopic[] = mqttRootTopic "/hpa";
-char mqttCo2Topic[] = mqttRootTopic "/co2";
-char mqttTvocTopic[] = mqttRootTopic "/tvoc";
+const char *mqttPostTemplate = R"({ "temp": %2.1f, "hum": %2.1f, "pres": %2.1f, "eco2": %2.1f, "tvoc": %2.1f })";
+
+const char mqttSensorJsonTopic[] = mqttRootTopic "/sensor";
+const char mqttTemperatureTopic[] = mqttRootTopic "/temp";
+const char mqttHumidityTopic[] = mqttRootTopic "/hum";
+const char mqttHpaTopic[] = mqttRootTopic "/hpa";
+const char mqttCo2Topic[] = mqttRootTopic "/co2";
+const char mqttTvocTopic[] = mqttRootTopic "/tvoc";
 
 #define TIME_ZONE_OFFSET_HRS            (+1)
 
@@ -358,14 +361,25 @@ void readTemp()
 
 void postData() 
 {
-    Serial.println("Publishing:");
-    Serial.println(mqttTemperatureTopic);
+    Serial.println("Publishing...");
+
+#if 0
+    char buf[1024];
+
+    sprintf(buf, mqttPostTemplate,
+            valueTemperature, valueHumidity,valuePressure,
+            valueEco2, valueEvoc);
+
+    Serial.println(mqttRootTopic);
+
+    mqttClient.beginMessage(mqttSensorJsonTopic);
+    mqttClient.print(buf);
+    mqttClient.endMessage();
+#endif
 
     mqttClient.beginMessage(mqttTemperatureTopic);
     mqttClient.print(valueTemperature);
     mqttClient.endMessage();
-
-    Serial.println(mqttHumidityTopic);
 
     mqttClient.beginMessage(mqttHumidityTopic);
     mqttClient.print(valueHumidity);
