@@ -215,6 +215,11 @@ void setupTemp()
     Serial.println("Setting up BME280");
 
     settings.bme280Addr = BME280I2C::I2CAddr_0x77;
+    settings.humOSR = BME280::OSR_X1;
+    settings.tempOSR = BME280::OSR_X1;
+    settings.presOSR = BME280::OSR_X1;
+    settings.filter = BME280::Filter_Off;
+    settings.mode = BME280::Mode_Forced;
     bme = new BME280I2C(settings);
 
     while(!bme->begin())
@@ -401,7 +406,7 @@ void postData()
 void loop()
 {
     unsigned long now = millis();
-    if (now - lastAirUpdate > 5000) {
+    if (now - lastAirUpdate > samplingDelay) {
         lastAirUpdate = now;
         readAirQ();
         readTemp();

@@ -13,6 +13,8 @@ int mqttBrokerPort = 8883;
 
 char mqttRootTopic[] = "/some/thing/";
 
+// NOTE: faster sampling means possibly higher errors / lower accuracy in Temperature measurements. Pay attention.
+int samplingDelay = 60000;      // in milliseconds
 int mqttPostDelay = 60000;      // in milliseconds
 
 char DEVICE_PUBLIC_CERT[] = "-----BEGIN CERTIFICATE-----\n\
