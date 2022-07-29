@@ -57,6 +57,7 @@ const char *mqttPostTemplate = R"({ "temp": %2.1f, "hum": %2.1f, "pres": %2.1f, 
 const char mqttSensorJsonTopic[] = mqttRootTopic "/sensor";
 const char mqttTemperatureTopic[] = mqttRootTopic "/temp";
 const char mqttHumidityTopic[] = mqttRootTopic "/hum";
+const char mqttHumIndexTopic[] = mqttRootTopic "/humindex";
 const char mqttHpaTopic[] = mqttRootTopic "/hpa";
 const char mqttCo2Topic[] = mqttRootTopic "/co2";
 const char mqttTvocTopic[] = mqttRootTopic "/tvoc";
@@ -70,6 +71,7 @@ float valueHumidity = 10.1;
 float valuePressure = 10.1;
 float valueEvoc = 10.1;
 float valueEco2 = 10.1;
+float valueHumIndex = 0;
 
 unsigned long lastAirUpdate = 0;
 unsigned long lastPostUpdate = 0;
@@ -334,6 +336,15 @@ void readAirQ()
     }
 }
 
+float calculateHumidex(float temperature, float humidity) {
+    float e;
+
+    e = (6.112 * pow(10,(7.5 * temperature/(237.7 + temperature))) * humidity/100); //vapor pressure
+
+    float humidex = temperature + 0.55555555 * (e - 10.0); //humidex
+    return humidex;
+}
+
 void readTemp()
 {
     float temp(NAN), hum(NAN), pres(NAN);
@@ -356,6 +367,7 @@ void readTemp()
     valueTemperature = temp;
     valueHumidity = hum;
     valuePressure = pres;
+    valueHumIndex = calculateHumidex(valueTemperature, valueHumidity);
 
 #if defined(ENABLE_BT)
     bleChTemperature->indicate();
@@ -388,6 +400,10 @@ void postData()
 
     mqttClient.beginMessage(mqttHumidityTopic);
     mqttClient.print(valueHumidity);
+    mqttClient.endMessage();
+
+    mqttClient.beginMessage(mqttHumIndexTopic);
+    mqttClient.print(valueHumIndex);
     mqttClient.endMessage();
 
     mqttClient.beginMessage(mqttHpaTopic);
