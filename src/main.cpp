@@ -378,6 +378,21 @@ void readTemp()
 
 void postData() 
 {
+    if (!mqttClient.connected()) {
+        Serial.println("Reconnecting MQTT...");
+        int retry = 5;
+        while (!mqttClient.connect(mqttBroker, mqttBrokerPort)) {
+            Serial.print("MQTT connection failed! Error code = ");
+            Serial.println(mqttClient.connectError());
+            delay (5000);
+            --retry;
+            if (retry == 0) {
+                Serial.print("Failed, trying later.");
+                return;
+            }
+        }
+    }
+
     Serial.println("Publishing...");
 
 #if 0
